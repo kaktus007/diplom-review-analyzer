@@ -1,0 +1,20 @@
+# Основные
+pandas==1.5.3
+numpy==1.24.3
+
+# NLP
+pymorphy2==0.9.1
+pymorphy2-dicts-ru==2.4.417127.4579844
+nltk==3.8.1
+
+# Визуализация
+wordcloud==1.9.2
+matplotlib==3.7.2
+seaborn==0.12.2
+
+# Утилиты
+tqdm==4.65.0
+python-dotenv==1.0.0
+setuptools==68.0.0
+wheel==0.40.0
+googletrans==4.0.0-rc1
