@@ -239,7 +239,7 @@ def main():
         print("🔄 ПОВТОРНЫЙ АНАЛИЗ С НОВЫМИ СТОП-СЛОВАМИ")
         print("=" * 60)
     
-    # 9. Финальная визуализация
+    # 9. Визуализация
     print("\n" + "=" * 60)
     print("🖼️  СОЗДАНИЕ ВИЗУАЛИЗАЦИЙ")
     print("=" * 60)
@@ -268,23 +268,9 @@ def main():
 
     print("\nСоздание облаков слов по категориям...")
     visualizer.create_category_wordclouds(
-        results,  
+        categories_stats,  # Передаем categories_stats вместо results
         words_per_cloud=40
     )
-
-    # Визуализация длины отзывов
-    print("\n📊 Визуализация длины отзывов...")
-    visualizer.plot_text_length_analysis(
-        results['df'], 
-        categories_stats if 'categories_stats' in locals() else None,
-        'text_length_analysis.png'
-    )
-
-    if 'categories_stats' in locals() and categories_stats:
-        visualizer.plot_sentiment_length_by_category(
-            categories_stats,
-            'sentiment_length_by_category.png'
-        )
 
     # Сохраняем лемматизированные слова в файл
     print("\n📝 Сохранение лемматизированных слов в файл...")
@@ -294,9 +280,18 @@ def main():
     visualizer.plot_rating_distribution(results['df'])
     visualizer.plot_field_usage(results['df'])
 
-    if results['has_category']:
-        visualizer.create_category_chart(results)
-        visualizer.create_category_summary_chart(results, top_n=20)
+    if 'categories_stats' in locals() and categories_stats:
+        visualizer.create_category_chart(categories_stats)
+        visualizer.create_category_summary_chart(categories_stats, top_n=20)
+        visualizer.plot_sentiment_length_by_category(categories_stats, 'sentiment_length_by_category.png')
+
+    # Визуализация длины отзывов
+    print("\n📊 Визуализация длины отзывов...")
+    visualizer.plot_text_length_analysis(
+        results['df'], 
+        categories_stats if 'categories_stats' in locals() else None,
+        'text_length_analysis.png'
+    )
 
 
 if __name__ == "__main__":

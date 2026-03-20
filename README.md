@@ -144,7 +144,7 @@ diplom-review-analyzer/
 
 <details>
 
-**<summary>DiplomReviewAnalyzer (analyzer.py)</summary>**
+<summary>DiplomReviewAnalyzer (analyzer.py)</summary>
 
 Основной класс для анализа отзывов.
 
@@ -170,7 +170,7 @@ diplom-review-analyzer/
 </details>
 <details>
 
-**<summary>ReviewVisualizer (visualization.py)</summary>**
+<summary>ReviewVisualizer (visualization.py)</summary>
 
 Класс для создания визуализаций.
 
@@ -197,7 +197,7 @@ diplom-review-analyzer/
 </details>
 <details>
 
-**<summary>Утилиты (utils.py)</summary>**
+<summary>Утилиты (utils.py)</summary>
 
 Вспомогательные функции для сохранения результатов.
 

@@ -632,20 +632,24 @@ class DiplomReviewAnalyzer:
             # Топ слов из полей plus и minus
             top_plus_words = []
             top_minus_words = []
+            top_plus_words_display = []  # Для вывода в консоль (только топ-10)
+            top_minus_words_display = []  # Для вывода в консоль (только топ-10)
 
             if fields_filled['plus'] > 0:
                 all_plus = ' '.join(category_df['plus'].dropna().astype(str))
                 cleaned = self.clean_text(all_plus)
                 words = self.lemmatize_text(cleaned)
                 word_counts = Counter(words)
-                top_plus_words = word_counts.most_common(10)
+                top_plus_words = word_counts.most_common(50)  # Сохраняем 50 слов для облаков
+                top_plus_words_display = top_plus_words[:10]  # Для консоли только 10
 
             if fields_filled['minus'] > 0:
                 all_minus = ' '.join(category_df['minus'].dropna().astype(str))
                 cleaned = self.clean_text(all_minus)
                 words = self.lemmatize_text(cleaned)
                 word_counts = Counter(words)
-                top_minus_words = word_counts.most_common(10)
+                top_minus_words = word_counts.most_common(50)  # Сохраняем 50 слов для облаков
+                top_minus_words_display = top_minus_words[:10]  # Для консоли только 10
 
             # Сохраняем все данные в словарь (только для валидных категорий)
             categories_stats[category] = {
@@ -661,7 +665,9 @@ class DiplomReviewAnalyzer:
                 'fields_filled': fields_filled,
                 'fields_percent': fields_percent,
                 'top_plus_words': top_plus_words,
+                'top_plus_words_full': top_plus_words, 
                 'top_minus_words': top_minus_words,
+                'top_minus_words_full': top_minus_words,
                 'text_length': {
                     'min': min_length,
                     'max': max_length,

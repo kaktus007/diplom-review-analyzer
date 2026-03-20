@@ -117,31 +117,37 @@ class ReviewVisualizer:
         plt.close()
         print(f"   ✅ Сохранено: {full_path}")
     
-    def create_category_chart(self, results, filename='category_sentiment.png'):
-        """График тональности по категориям"""
-        if not results['has_category']:
+    def create_category_chart(self, categories_stats, filename='category_sentiment.png'):
+        """
+        График тональности по категориям (использует categories_stats)
+        
+        Parameters:
+        categories_stats (dict): Статистика по категориям
+        filename (str): Имя файла для сохранения
+        """
+        if not categories_stats:
+            print("❌ Нет данных по категориям")
             return
         
-        category_stats = results['stats']['category_stats']
+        # Получаем все категории, исключая unknown
+        all_categories = [(cat, stats) for cat, stats in categories_stats.items() if cat != 'unknown']
         
-        # Получаем все категории
-        all_categories = [(cat, stats) for cat, stats in category_stats.items() if cat != 'unknown']
+        if not all_categories:
+            print("❌ Нет категорий для отображения")
+            return
         
-        # Сортируем по количеству отзывов и берем топ-10 для читаемости графика
+        # Сортируем по количеству отзывов и берем топ-10 для читаемости
         top_categories = sorted(
             all_categories,
-            key=lambda x: x[1]['total'],
+            key=lambda x: x[1]['total_reviews'],
             reverse=True
         )[:10]
         
-        if not top_categories:
-            return
-        
         # Переводим названия категорий
         categories = [self.analyzer.translate_category(cat) for cat, _ in top_categories]
-        positive = [stats['positive'] for _, stats in top_categories]
-        negative = [stats['negative'] for _, stats in top_categories]
-        neutral = [stats['neutral'] for _, stats in top_categories]
+        positive = [stats['sentiment']['positive'] for _, stats in top_categories]
+        negative = [stats['sentiment']['negative'] for _, stats in top_categories]
+        neutral = [stats['sentiment']['neutral'] for _, stats in top_categories]
         
         plt.figure(figsize=(12, 6))
         x = range(len(categories))
@@ -165,8 +171,16 @@ class ReviewVisualizer:
 
     def plot_categories_summary(self, categories_stats, top_n=15):
         """
-        Визуализация сводки по категориям
+        Визуализация сводки по категориям (использует categories_stats)
+        
+        Parameters:
+        categories_stats (dict): Статистика по категориям
+        top_n (int): Количество категорий для отображения
         """
+        if not categories_stats:
+            print("❌ Нет данных по категориям")
+            return
+        
         # Подготовка данных
         categories = []
         total_reviews = []
@@ -174,7 +188,7 @@ class ReviewVisualizer:
         negative_pct = []
         
         sorted_cats = sorted(
-            categories_stats.items(),
+            [(cat, stats) for cat, stats in categories_stats.items() if cat != 'unknown'],
             key=lambda x: x[1]['total_reviews'],
             reverse=True
         )[:top_n]
@@ -227,223 +241,226 @@ class ReviewVisualizer:
         plt.close()
         print(f"   ✅ Сохранено: categories_sentiment.png")
 
-    def create_category_wordclouds(self, results, category_stats=None, words_per_cloud=40):
+    def create_category_wordclouds(self, categories_stats, words_per_cloud=40):
         """
-        Создание облаков слов для категорий.
-
+        Создание облаков слов для категорий (использует top_plus_words_full и top_minus_words_full из categories_stats)
+        
         Parameters:
-        results (dict): Результаты анализа (должен содержать category_frequencies)
-        category_stats (dict, optional): Статистика по категориям для сортировки
+        categories_stats (dict): Статистика по категориям
         words_per_cloud (int): Сколько слов в облаке
         """
-        if not results['has_category']:
+        if not categories_stats:
             print("❌ Нет данных по категориям")
             return
-
+    
         print("\n" + "=" * 60)
         print("☁️  СОЗДАНИЕ ОБЛАКОВ СЛОВ ДЛЯ ВСЕХ КАТЕГОРИЙ")
         print("=" * 60)
-
-        category_freqs = results['category_frequencies']
-
+    
         # Получаем ВСЕ категории, исключая unknown
-        all_categories = [cat for cat in category_freqs.keys() if cat != 'unknown']
-
+        all_categories = [cat for cat in categories_stats.keys() if cat != 'unknown']
+    
         if not all_categories:
             print("❌ Нет категорий для обработки")
             return
-
+    
         print(f"📊 Всего категорий для обработки: {len(all_categories)}")
         
         # Показываем переведенные названия категорий
         translated_categories = [self.analyzer.translate_category(cat) for cat in all_categories]
         print(f"📊 Категории: {', '.join(translated_categories)}")
-
+    
         created_count = 0
         for category in all_categories:
+            stats = categories_stats[category]
             translated_category = self.analyzer.translate_category(category)
             print(f"\n📊 Создание облаков для категории: {translated_category}")
-
-            # Положительные слова
-            if category in category_freqs and category_freqs[category]['positive']:
-                pos_words = dict(category_freqs[category]['positive'].most_common(words_per_cloud))
-                if pos_words:
-                    try:
-                        wordcloud = WordCloud(
-                            width=1000,
-                            height=500,
-                            background_color='white',
-                            max_words=words_per_cloud,
-                            colormap='Greens',
-                            random_state=42,
-                            contour_width=1,
-                            contour_color='darkgreen'
-                        ).generate_from_frequencies(pos_words)
-
-                        plt.figure(figsize=(12, 6))
-                        plt.imshow(wordcloud, interpolation='bilinear')
-                        plt.axis('off')
-                        plt.title(f'Положительные отзывы: {translated_category}', fontsize=14, pad=20)
-                        plt.tight_layout()
-
-                        # Очищаем название категории для имени файла
-                        clean_category = category.lower().replace(' ', '_').replace('-', '_')
-                        filename = f'{self.output_dir}/positive_{clean_category}.png'
-                        plt.savefig(filename, dpi=300, bbox_inches='tight')
-                        plt.close()
-                        print(f"   ✅ Положительные: positive_{clean_category}.png")
-                        created_count += 1
-                    except Exception as e:
-                        print(f"   ⚠️ Ошибка при создании положительного облака: {e}")
-
-            # Отрицательные слова
-            if category in category_freqs and category_freqs[category]['negative']:
-                neg_words = dict(category_freqs[category]['negative'].most_common(words_per_cloud))
-                if neg_words:
-                    try:
-                        wordcloud = WordCloud(
-                            width=1000,
-                            height=500,
-                            background_color='white',
-                            max_words=words_per_cloud,
-                            colormap='Reds',
-                            random_state=42,
-                            contour_width=1,
-                            contour_color='darkred'
-                        ).generate_from_frequencies(neg_words)
-
-                        plt.figure(figsize=(12, 6))
-                        plt.imshow(wordcloud, interpolation='bilinear')
-                        plt.axis('off')
-                        plt.title(f'Отрицательные отзывы: {translated_category}', fontsize=14, pad=20)
-                        plt.tight_layout()
-
-                        clean_category = category.lower().replace(' ', '_').replace('-', '_')
-                        filename = f'{self.output_dir}/negative_{clean_category}.png'
-                        plt.savefig(filename, dpi=300, bbox_inches='tight')
-                        plt.close()
-                        print(f"   ✅ Отрицательные: negative_{clean_category}.png")
-                        created_count += 1
-                    except Exception as e:
-                        print(f"   ⚠️ Ошибка при создании отрицательного облака: {e}")
-
+    
+            # Положительные слова (из top_plus_words_full, если есть, иначе из top_plus_words)
+            if stats.get('top_plus_words_full'):
+                pos_words = dict(stats['top_plus_words_full'][:words_per_cloud])
+            elif stats.get('top_plus_words'):
+                pos_words = dict(stats['top_plus_words'][:words_per_cloud])
+            else:
+                pos_words = {}
+            
+            if pos_words:
+                try:
+                    wordcloud = WordCloud(
+                        width=1000,
+                        height=500,
+                        background_color='white',
+                        max_words=words_per_cloud,
+                        colormap='Greens',
+                        random_state=42,
+                        contour_width=1,
+                        contour_color='darkgreen'
+                    ).generate_from_frequencies(pos_words)
+    
+                    plt.figure(figsize=(12, 6))
+                    plt.imshow(wordcloud, interpolation='bilinear')
+                    plt.axis('off')
+                    plt.title(f'Положительные отзывы: {translated_category}', fontsize=14, pad=20)
+                    plt.tight_layout()
+    
+                    # Очищаем название категории для имени файла
+                    clean_category = category.lower().replace(' ', '_').replace('-', '_')
+                    filename = f'{self.output_dir}/positive_{clean_category}.png'
+                    plt.savefig(filename, dpi=300, bbox_inches='tight')
+                    plt.close()
+                    print(f"   ✅ Положительные: positive_{clean_category}.png ({len(pos_words)} слов)")
+                    created_count += 1
+                except Exception as e:
+                    print(f"   ⚠️ Ошибка при создании положительного облака: {e}")
+    
+            # Отрицательные слова (из top_minus_words_full, если есть, иначе из top_minus_words)
+            if stats.get('top_minus_words_full'):
+                neg_words = dict(stats['top_minus_words_full'][:words_per_cloud])
+            elif stats.get('top_minus_words'):
+                neg_words = dict(stats['top_minus_words'][:words_per_cloud])
+            else:
+                neg_words = {}
+            
+            if neg_words:
+                try:
+                    wordcloud = WordCloud(
+                        width=1000,
+                        height=500,
+                        background_color='white',
+                        max_words=words_per_cloud,
+                        colormap='Reds',
+                        random_state=42,
+                        contour_width=1,
+                        contour_color='darkred'
+                    ).generate_from_frequencies(neg_words)
+    
+                    plt.figure(figsize=(12, 6))
+                    plt.imshow(wordcloud, interpolation='bilinear')
+                    plt.axis('off')
+                    plt.title(f'Отрицательные отзывы: {translated_category}', fontsize=14, pad=20)
+                    plt.tight_layout()
+    
+                    clean_category = category.lower().replace(' ', '_').replace('-', '_')
+                    filename = f'{self.output_dir}/negative_{clean_category}.png'
+                    plt.savefig(filename, dpi=300, bbox_inches='tight')
+                    plt.close()
+                    print(f"   ✅ Отрицательные: negative_{clean_category}.png ({len(neg_words)} слов)")
+                    created_count += 1
+                except Exception as e:
+                    print(f"   ⚠️ Ошибка при создании отрицательного облака: {e}")
+    
         print(f"\n✅ Всего создано облаков: {created_count}")
 
-    def create_category_summary_chart(self, results, top_n=20):
+    def create_category_summary_chart(self, categories_stats, top_n=20):
         """
-        Создание сводного графика с топ-словами по категориям.
-
+        Создание сводного графика с топ-словами по категориям (использует categories_stats)
+        
         Parameters:
-        results (dict): Результаты анализа
+        categories_stats (dict): Статистика по категориям
         top_n (int): Количество категорий для отображения
         """
-        if not results['has_category']:
+        if not categories_stats:
             print("❌ Нет данных по категориям")
             return
 
         print("\n📊 СОЗДАНИЕ СВОДНОГО ГРАФИКА ПО КАТЕГОРИЯМ")
-
-        category_freqs = results['category_frequencies']
-
+        
         # Получаем все категории, исключая unknown
-        all_categories = []
-        for cat in category_freqs.keys():
-            if cat != 'unknown':
-                all_categories.append(cat)
-
+        all_categories = [cat for cat in categories_stats.keys() if cat != 'unknown']
+        
         if not all_categories:
             print("❌ Нет категорий для отображения")
             return
-
-        # Берем первые top_n категорий (или все, если их меньше)
-        categories_to_show = all_categories[:min(top_n, len(all_categories))]
+        
+        # Сортируем по популярности и берем топ-N
+        sorted_cats = sorted(
+            [(cat, stats) for cat, stats in categories_stats.items() if cat != 'unknown'],
+            key=lambda x: x[1]['total_reviews'],
+            reverse=True
+        )[:top_n]
+        
+        categories_to_show = [cat for cat, _ in sorted_cats]
         
         # Переводим названия категорий
         translated_categories = [self.analyzer.translate_category(cat) for cat in categories_to_show]
-
+        
         print(f"   Отображаю категории: {', '.join(translated_categories)}")
-
+        
         # Создаем фигуру с подграфиками
         n_categories = len(categories_to_show)
         fig, axes = plt.subplots(n_categories, 2, figsize=(14, n_categories * 2.5))
         fig.suptitle('Топ-слова по категориям', fontsize=16, y=1)
-
+        
         # Обрабатываем случай с одной категорией
         if n_categories == 1:
-            # Преобразуем axes в двумерный массив для единообразия
             axes = axes.reshape(1, 2)
-
-        for i, (category, translated_category) in enumerate(zip(categories_to_show, translated_categories)):
-            # Положительные слова
-            if category in category_freqs:
-                pos_words_dict = category_freqs[category]['positive']
-                if pos_words_dict:
-                    # Берем топ-7 слов
-                    top_pos = pos_words_dict.most_common(7)
-                    if top_pos:
-                        words = [w for w, _ in top_pos]
-                        counts = [c for _, c in top_pos]
-
-                        axes[i, 0].barh(words, counts, color='green', alpha=0.7)
-                        axes[i, 0].set_title(f'{translated_category} - Положительные', fontsize=10)
-                        axes[i, 0].invert_yaxis()
-                        axes[i, 0].set_xlabel('Частота')
-
-            # Отрицательные слова
-            if category in category_freqs:
-                neg_words_dict = category_freqs[category]['negative']
-                if neg_words_dict:
-                    # Берем топ-7 слов
-                    top_neg = neg_words_dict.most_common(7)
-                    if top_neg:
-                        words = [w for w, _ in top_neg]
-                        counts = [c for _, c in top_neg]
-
-                        axes[i, 1].barh(words, counts, color='red', alpha=0.7)
-                        axes[i, 1].set_title(f'{translated_category} - Отрицательные', fontsize=10)
-                        axes[i, 1].invert_yaxis()
-                        axes[i, 1].set_xlabel('Частота')
-
+        
+        for i, (category, stats) in enumerate(sorted_cats):
+            translated_category = self.analyzer.translate_category(category)
+            
+            # Положительные слова (из top_plus_words)
+            if stats.get('top_plus_words'):
+                top_pos = stats['top_plus_words'][:7]  # Берем топ-7
+                if top_pos:
+                    words = [w for w, _ in top_pos]
+                    counts = [c for _, c in top_pos]
+                    
+                    axes[i, 0].barh(words, counts, color='green', alpha=0.7)
+                    axes[i, 0].set_title(f'{translated_category} - Положительные', fontsize=10)
+                    axes[i, 0].invert_yaxis()
+                    axes[i, 0].set_xlabel('Частота')
+            
+            # Отрицательные слова (из top_minus_words)
+            if stats.get('top_minus_words'):
+                top_neg = stats['top_minus_words'][:7]  # Берем топ-7
+                if top_neg:
+                    words = [w for w, _ in top_neg]
+                    counts = [c for _, c in top_neg]
+                    
+                    axes[i, 1].barh(words, counts, color='red', alpha=0.7)
+                    axes[i, 1].set_title(f'{translated_category} - Отрицательные', fontsize=10)
+                    axes[i, 1].invert_yaxis()
+                    axes[i, 1].set_xlabel('Частота')
+        
         plt.tight_layout()
         plt.savefig(f'{self.output_dir}/category_words_summary.png', dpi=300, bbox_inches='tight')
         plt.close()
         print(f"   ✅ Сохранено: category_words_summary.png")
 
-    # ВИЗУАЛИЗАЦИЯ ДЛИНЫ ОТЗЫВОВ
     def plot_text_length_analysis(self, df, categories_stats=None, filename='text_length_analysis.png'):
         """
         Визуализация анализа длины отзывов.
-
+        
         Parameters:
         df (DataFrame): Данные с отзывами
         categories_stats (dict): Статистика по категориям (опционально)
         filename (str): Имя файла для сохранения
         """
         print("\n📊 СОЗДАНИЕ ВИЗУАЛИЗАЦИИ ДЛИНЫ ОТЗЫВОВ")
-
+        
         # Создаем копию DataFrame и добавляем колонку sentiment, если её нет
         df_copy = df.copy()
-
+        
         # Если колонки sentiment нет, создаем её на основе рейтинга
         if 'sentiment' not in df_copy.columns:
             print("   ℹ️ Колонка 'sentiment' не найдена, создаем на основе рейтинга")
             df_copy['sentiment'] = 'neutral'
             df_copy.loc[df_copy['rating'] >= 4, 'sentiment'] = 'positive'
             df_copy.loc[df_copy['rating'] <= 2, 'sentiment'] = 'negative'
-
+        
         # Создаем фигуру с несколькими подграфиками
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
         fig.suptitle('Анализ длины отзывов', fontsize=16, y=0.98)
-
+        
         # 1. Распределение длины отзывов (гистограмма)
         ax1 = axes[0, 0]
         text_lengths = df_copy['text'].dropna().astype(str).str.len()
-
+        
         if len(text_lengths) > 0:
             # Ограничиваем для читаемости (берем 99-й перцентиль)
             max_len = text_lengths.quantile(0.99)
             filtered_lengths = text_lengths[text_lengths <= max_len]
-
+            
             ax1.hist(filtered_lengths, bins=50, color='skyblue', edgecolor='navy', alpha=0.7)
             ax1.axvline(text_lengths.mean(), color='red', linestyle='--', linewidth=2, label=f'Средняя: {text_lengths.mean():.0f} симв.')
             ax1.axvline(text_lengths.median(), color='green', linestyle='--', linewidth=2, label=f'Медиана: {text_lengths.median():.0f} симв.')
@@ -454,34 +471,34 @@ class ReviewVisualizer:
             ax1.grid(axis='y', alpha=0.3)
         else:
             ax1.text(0.5, 0.5, 'Нет данных', ha='center', va='center', transform=ax1.transAxes)
-
+        
         # 2. Длина отзывов по тональности (boxplot)
         ax2 = axes[0, 1]
-
+        
         # Подготавливаем данные по тональности
         sentiment_data = []
         sentiment_labels = []
-
+        
         for sentiment in ['positive', 'neutral', 'negative']:
             sentiment_df = df_copy[df_copy['sentiment'] == sentiment]
             lengths = sentiment_df['text'].dropna().astype(str).str.len()
             if len(lengths) > 0:
                 sentiment_data.append(lengths)
                 sentiment_labels.append(f'{sentiment}\n({len(sentiment_df)} отзывов)')
-
+        
         if sentiment_data:
             bp = ax2.boxplot(sentiment_data, labels=sentiment_labels, patch_artist=True)
-
+            
             # Цвета для боксплотов
             colors = ['green', 'gray', 'red']
             for patch, color in zip(bp['boxes'], colors[:len(sentiment_data)]):
                 patch.set_facecolor(color)
                 patch.set_alpha(0.7)
-
+            
             ax2.set_ylabel('Длина отзыва (символы)')
             ax2.set_title('Длина отзывов по тональности')
             ax2.grid(axis='y', alpha=0.3)
-
+            
             # Добавляем средние значения
             for i, (data, label) in enumerate(zip(sentiment_data, sentiment_labels), 1):
                 mean_val = data.mean()
@@ -489,55 +506,55 @@ class ReviewVisualizer:
                         ha='center', va='bottom', fontsize=8, fontweight='bold')
         else:
             ax2.text(0.5, 0.5, 'Нет данных', ha='center', va='center', transform=ax2.transAxes)
-
+        
         # 3. Доля заполненных полей (столбчатая диаграмма)
         ax3 = axes[1, 0]
-
+        
         text_filled = df_copy['text'].notna().sum() / len(df_copy) * 100
         plus_filled = df_copy['plus'].notna().sum() / len(df_copy) * 100
         minus_filled = df_copy['minus'].notna().sum() / len(df_copy) * 100
-
+        
         fields = ['text', 'plus', 'minus']
         filled_pct = [text_filled, plus_filled, minus_filled]
         colors = ['lightgreen', 'gold', 'lightcoral']
-
+        
         bars = ax3.bar(fields, filled_pct, color=colors, edgecolor='black')
         ax3.set_ylabel('Заполненность (%)')
         ax3.set_title('Доля заполненных полей в отзывах')
         ax3.set_ylim(0, 100)
-
+        
         for bar, pct in zip(bars, filled_pct):
             ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1,
                     f'{pct:.1f}%', ha='center', va='bottom', fontsize=10)
         ax3.grid(axis='y', alpha=0.3)
-
-        # 4. Средняя длина по категориям (топ-15)
+        
+        # 4. Средняя длина по категориям (из categories_stats)
         ax4 = axes[1, 1]
-
+        
         if categories_stats:
             # Собираем данные по категориям
             categories_data = []
-
+            
             for cat, stats in categories_stats.items():
-                if stats['total_reviews'] >= 10:
+                if cat != 'unknown' and stats['total_reviews'] >= 10:
                     categories_data.append({
                         'name': self.analyzer.translate_category(cat),
                         'avg_length': stats['text_length']['avg'],
                         'total_reviews': stats['total_reviews']
                     })
-
+            
             if categories_data:
                 # Сортируем по средней длине отзыва (по убыванию)
                 categories_data.sort(key=lambda x: x['avg_length'], reverse=True)
-
+                
                 # Берем топ-15
                 categories_data = categories_data[:15]
-
-                categories = [item['name'][:25] for item in categories_data]  # Ограничиваем длину названия
+                
+                categories = [item['name'][:25] for item in categories_data]
                 avg_lengths = [item['avg_length'] for item in categories_data]
                 total_reviews = [item['total_reviews'] for item in categories_data]
-
-                # Горизонтальная гистограмма для лучшей читаемости
+                
+                # Горизонтальная гистограмма
                 y_pos = range(len(categories))
                 bars = ax4.barh(y_pos, avg_lengths, color='skyblue', edgecolor='navy')
                 ax4.set_yticks(y_pos)
@@ -545,47 +562,41 @@ class ReviewVisualizer:
                 ax4.set_xlabel('Средняя длина отзыва (символы)')
                 ax4.set_title('Средняя длина отзыва по категориям (сортировка по длине)')
                 ax4.invert_yaxis()
-
-                # Добавляем значения и подписи внутри/снаружи
+                
+                # Добавляем значения
                 for i, (bar, val, reviews) in enumerate(zip(bars, avg_lengths, total_reviews)):
-                    # Если столбец достаточно широк, размещаем подпись внутри
                     if val > max(avg_lengths) * 0.15:
                         ax4.text(val - 5, bar.get_y() + bar.get_height()/2,
                                 f'{val:.0f} ({reviews} отз.)', 
                                 va='center', ha='right', fontsize=8, color='white', fontweight='bold')
                     else:
-                        # Если столбец узкий, размещаем подпись снаружи справа
                         ax4.text(val + 5, bar.get_y() + bar.get_height()/2,
                                 f'{val:.0f} ({reviews} отз.)', 
                                 va='center', ha='left', fontsize=8, color='navy')
-
+                
                 ax4.grid(axis='x', alpha=0.3)
-
+                
                 # Добавляем вертикальную линию среднего значения
                 all_avg = sum(avg_lengths) / len(avg_lengths)
                 ax4.axvline(all_avg, color='red', linestyle='--', linewidth=1.5, alpha=0.7, label=f'Общее среднее: {all_avg:.0f}')
                 ax4.legend(loc='lower right', fontsize=8)
-
-                # Добавляем подпись с информацией о сортировке
+                
                 ax4.text(0.98, 0.02, '↗️ Сортировка: от длинных к коротким', 
                         transform=ax4.transAxes, ha='right', va='bottom', 
                         fontsize=8, style='italic', color='gray')
-
             else:
                 ax4.text(0.5, 0.5, 'Нет данных', ha='center', va='center', transform=ax4.transAxes)
         else:
             ax4.text(0.5, 0.5, 'Нет данных по категориям', ha='center', va='center', transform=ax4.transAxes)
-
+        
         plt.tight_layout()
         plt.savefig(f'{self.output_dir}/{filename}', dpi=300, bbox_inches='tight')
         plt.close()
         print(f"   ✅ Сохранено: {filename}")
 
-    # ВИЗУАЛИЗАЦИЯ ДЛИНЫ ПО ТОНАЛЬНОСТИ ПО КАТЕГОРИЯМ
     def plot_sentiment_length_by_category(self, categories_stats, filename='sentiment_length_by_category.png'):
         """
-        Визуализация длины положительных и отрицательных отзывов по категориям.
-        Помогает понять, какие категории вызывают более эмоциональные отклики.
+        Визуализация длины положительных и отрицательных отзывов по категориям (использует categories_stats)
         
         Parameters:
         categories_stats (dict): Статистика по категориям
@@ -605,7 +616,7 @@ class ReviewVisualizer:
         
         # Сортируем по популярности
         sorted_cats = sorted(
-            categories_stats.items(),
+            [(cat, stats) for cat, stats in categories_stats.items() if cat != 'unknown'],
             key=lambda x: x[1]['total_reviews'],
             reverse=True
         )[:12]  # Топ-12 категорий для читаемости
